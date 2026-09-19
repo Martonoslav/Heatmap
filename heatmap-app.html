@@ -1,0 +1,1827 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heatmapa Denných Trás</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Leaflet Draw CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  
+  <!-- Heatmap.js -->
+  <script src="https://cdn.jsdelivr.net/npm/heatmapjs@2.0.5/build/heatmap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-heat@0.2.0/leaflet-heat.js"></script>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      background: #f0f0f0;
+    }
+
+    #app {
+      display: flex;
+      height: 100%;
+      width: 100%;
+    }
+
+    /* Sidebar Styles */
+    #sidebar {
+      width: 350px;
+      background: #2c3e50;
+      color: #ecf0f1;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease;
+      z-index: 1000;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+    }
+
+    #sidebar.collapsed {
+      transform: translateX(-100%);
+    }
+
+    #sidebar-toggle {
+      background: #34495e;
+      color: white;
+      border: none;
+      padding: 12px;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid #1a252f;
+    }
+
+    #sidebar-toggle:hover {
+      background: #3d566e;
+    }
+
+    .sidebar-section {
+      padding: 15px;
+      border-bottom: 1px solid #1a252f;
+    }
+
+    .sidebar-section h3 {
+      color: #f1c40f;
+      margin-bottom: 10px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .tool-button {
+      background: #34495e;
+      color: #ecf0f1;
+      border: none;
+      padding: 10px;
+      margin: 5px 0;
+      cursor: pointer;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .tool-button:hover {
+      background: #3d566e;
+    }
+
+    .tool-button.active {
+      background: #f1c40f;
+      color: #2c3e50;
+    }
+
+    .tool-button i {
+      margin-right: 8px;
+    }
+
+    /* Map Container */
+    #map-container {
+      flex: 1;
+      height: 100%;
+      position: relative;
+    }
+
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+
+    /* Transport Mode Selector */
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+      color: #bdc3c7;
+    }
+
+    .form-group select,
+    .form-group input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #3d566e;
+      background: #1a252f;
+      color: #ecf0f1;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .form-group select:focus,
+    .form-group input:focus {
+      outline: none;
+      border-color: #f1c40f;
+    }
+
+    /* Color Picker */
+    .color-picker {
+      display: flex;
+      align-items: center;
+      margin-top: 5px;
+    }
+
+    .color-preview {
+      width: 30px;
+      height: 30px;
+      border-radius: 4px;
+      margin-right: 10px;
+      cursor: pointer;
+      border: 2px solid #3d566e;
+    }
+
+    /* Filter Section */
+    .filter-group {
+      margin-bottom: 10px;
+    }
+
+    .filter-group label {
+      display: flex;
+      align-items: center;
+      font-size: 12px;
+      color: #bdc3c7;
+      margin-bottom: 5px;
+    }
+
+    .filter-group input[type="checkbox"] {
+      margin-right: 8px;
+    }
+
+    .time-filter-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      margin-top: 10px;
+    }
+
+    .time-filter-btn {
+      background: #34495e;
+      color: #ecf0f1;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .time-filter-btn:hover {
+      background: #3d566e;
+    }
+
+    .time-filter-btn.active {
+      background: #f1c40f;
+      color: #2c3e50;
+    }
+
+    /* Route List */
+    .route-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+
+    .route-item {
+      background: #1a252f;
+      padding: 8px;
+      margin-bottom: 5px;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .route-item:hover {
+      background: #3d566e;
+    }
+
+    .route-item-info {
+      flex: 1;
+    }
+
+    .route-item-actions {
+      display: flex;
+      gap: 5px;
+    }
+
+    .route-item-actions button {
+      background: none;
+      border: none;
+      color: #bdc3c7;
+      cursor: pointer;
+      padding: 4px;
+      font-size: 12px;
+    }
+
+    .route-item-actions button:hover {
+      color: #f1c40f;
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      gap: 5px;
+      margin-top: 10px;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #f1c40f;
+      color: #2c3e50;
+    }
+
+    .btn-danger {
+      background: #e74c3c;
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #34495e;
+      color: #ecf0f1;
+    }
+
+    .action-btn:hover {
+      opacity: 0.9;
+    }
+
+    /* View Toggle */
+    .view-toggle {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      z-index: 1000;
+      display: flex;
+    }
+
+    .view-toggle button {
+      background: none;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .view-toggle button.active {
+      background: #2c3e50;
+      color: white;
+    }
+
+    .view-toggle button:first-child {
+      border-radius: 4px 0 0 4px;
+    }
+
+    .view-toggle button:last-child {
+      border-radius: 0 4px 4px 0;
+    }
+
+    /* Fullscreen Button */
+    .fullscreen-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: white;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      z-index: 1000;
+      margin-top: 50px;
+    }
+
+    /* Date Picker */
+    .date-picker {
+      position: relative;
+    }
+
+    .date-picker input[type="date"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #3d566e;
+      background: #1a252f;
+      color: #ecf0f1;
+      border-radius: 4px;
+    }
+
+    /* Legend */
+    .legend {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      z-index: 1000;
+      font-size: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      margin-right: 8px;
+      border: 1px solid #ccc;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: relative;
+      display: inline-block;
+    }
+
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      background-color: #555;
+      color: #fff;
+      text-align: center;
+      border-radius: 6px;
+      padding: 5px;
+      position: absolute;
+      z-index: 1;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    .tooltip:hover .tooltiptext {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+      #sidebar {
+        width: 100%;
+        height: auto;
+        transform: translateX(0);
+      }
+
+      #sidebar.collapsed {
+        display: none;
+      }
+
+      #sidebar-toggle {
+        display: none;
+      }
+
+      .sidebar-section {
+        padding: 10px;
+      }
+
+      .time-filter-buttons {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      .view-toggle {
+        top: auto;
+        bottom: 70px;
+        right: 10px;
+      }
+
+      .fullscreen-btn {
+        top: auto;
+        bottom: 10px;
+        right: 10px;
+        margin-top: 0;
+      }
+
+      .legend {
+        display: none;
+      }
+    }
+
+    /* Touch Support */
+    @media (hover: none) {
+      .tool-button {
+        padding: 12px;
+      }
+
+      .view-toggle button {
+        padding: 10px 15px;
+      }
+    }
+
+    /* Loading Spinner */
+    .loading-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #f1c40f;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      z-index: 2000;
+      background: rgba(255,255,255,0.8);
+    }
+
+    @keyframes spin {
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    /* Confirmation Dialog */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 3000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+      background-color: #2c3e50;
+      margin: 15% auto;
+      padding: 20px;
+      border-radius: 8px;
+      width: 80%;
+      max-width: 400px;
+      color: #ecf0f1;
+    }
+
+    .modal-header {
+      margin-bottom: 15px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .modal-body {
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .modal-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .modal-btn.cancel {
+      background: #34495e;
+      color: #ecf0f1;
+    }
+
+    .modal-btn.confirm {
+      background: #e74c3c;
+      color: white;
+    }
+
+    /* Custom Mode Input */
+    .custom-mode-input {
+      display: none;
+      margin-top: 10px;
+    }
+
+    .custom-mode-input.show {
+      display: block;
+    }
+
+    /* Snapping Status */
+    .snapping-status {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.9);
+      padding: 8px 15px;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      z-index: 1000;
+      display: none;
+    }
+
+    .snapping-status.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <button id="sidebar-toggle" class="tooltip">
+        <i class="fas fa-bars"></i>
+        <span class="tooltiptext">Menu</span>
+      </button>
+
+      <!-- Drawing Tools Section -->
+      <div class="sidebar-section">
+        <h3>Drawing Tools</h3>
+        <button id="draw-line" class="tool-button tooltip">
+          <i class="fas fa-route"></i>
+          <span>Line</span>
+          <span class="tooltiptext">Draw polyline route</span>
+        </button>
+        <button id="draw-point" class="tool-button tooltip">
+          <i class="fas fa-map-marker-alt"></i>
+          <span>Point</span>
+          <span class="tooltiptext">Add location point</span>
+        </button>
+        <button id="draw-brush" class="tool-button tooltip">
+          <i class="fas fa-paint-brush"></i>
+          <span>Brush</span>
+          <span class="tooltiptext">Freehand drawing</span>
+        </button>
+        <button id="stop-drawing" class="tool-button tooltip" style="display: none;">
+          <i class="fas fa-stop"></i>
+          <span>Stop Drawing</span>
+          <span class="tooltiptext">Finish drawing</span>
+        </button>
+      </div>
+
+      <!-- Transport Mode Section -->
+      <div class="sidebar-section">
+        <h3>Transport Mode</h3>
+        <div class="form-group">
+          <select id="transport-mode">
+            <option value="car">Car</option>
+            <option value="public-transport">Public Transport (MHD)</option>
+            <option value="train">Train</option>
+            <option value="airplane">Airplane</option>
+            <option value="walking">Walking</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div id="custom-mode-container" class="custom-mode-input">
+          <div class="form-group">
+            <label for="custom-name">Custom Name</label>
+            <input type="text" id="custom-name" placeholder="Enter custom mode name">
+          </div>
+          <div class="form-group">
+            <label for="custom-color">Custom Color</label>
+            <div class="color-picker">
+              <div id="custom-color-preview" class="color-preview" style="background: #FF0000;"></div>
+              <input type="color" id="custom-color" value="#FF0000">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Route Snapping Section -->
+      <div class="sidebar-section">
+        <h3>Route Snapping</h3>
+        <button id="snap-route" class="tool-button tooltip">
+          <i class="fas fa-road"></i>
+          <span>Snap to Road</span>
+          <span class="tooltiptext">Snap current route to nearest roads</span>
+        </button>
+      </div>
+
+      <!-- Time Filter Section -->
+      <div class="sidebar-section">
+        <h3>Time Filter</h3>
+        <div class="time-filter-buttons">
+          <button class="time-filter-btn active" data-filter="today">Today</button>
+          <button class="time-filter-btn" data-filter="week">Last 7 Days</button>
+          <button class="time-filter-btn" data-filter="month">Last 30 Days</button>
+          <button class="time-filter-btn" data-filter="3months">Last 3 Months</button>
+          <button class="time-filter-btn" data-filter="6months">Last 6 Months</button>
+          <button class="time-filter-btn" data-filter="year">Last Year</button>
+          <button class="time-filter-btn" data-filter="all">All Time</button>
+        </div>
+      </div>
+
+      <!-- Date Range Section -->
+      <div class="sidebar-section">
+        <h3>Date Range</h3>
+        <div class="form-group">
+          <label for="start-date">From</label>
+          <input type="date" id="start-date">
+        </div>
+        <div class="form-group">
+          <label for="end-date">To</label>
+          <input type="date" id="end-date">
+        </div>
+      </div>
+
+      <!-- Transport Mode Filter Section -->
+      <div class="sidebar-section">
+        <h3>Filter by Transport</h3>
+        <div class="filter-group">
+          <label>
+            <input type="checkbox" class="mode-filter" value="car" checked>
+            Car
+          </label>
+          <label>
+            <input type="checkbox" class="mode-filter" value="public-transport" checked>
+            Public Transport
+          </label>
+          <label>
+            <input type="checkbox" class="mode-filter" value="train" checked>
+            Train
+          </label>
+          <label>
+            <input type="checkbox" class="mode-filter" value="airplane" checked>
+            Airplane
+          </label>
+          <label>
+            <input type="checkbox" class="mode-filter" value="walking" checked>
+            Walking
+          </label>
+          <label>
+            <input type="checkbox" class="mode-filter" value="custom" checked>
+            Custom
+          </label>
+        </div>
+      </div>
+
+      <!-- View Toggle Section -->
+      <div class="sidebar-section">
+        <h3>View Options</h3>
+        <button id="toggle-routes" class="tool-button tooltip">
+          <i class="fas fa-road"></i>
+          <span>Toggle Routes</span>
+          <span class="tooltiptext">Show/hide all routes</span>
+        </button>
+        <button id="toggle-heatmap" class="tool-button tooltip">
+          <i class="fas fa-fire"></i>
+          <span>Toggle Heatmap</span>
+          <span class="tooltiptext">Show/hide heatmap overlay</span>
+        </button>
+      </div>
+
+      <!-- Route List Section -->
+      <div class="sidebar-section">
+        <h3>Saved Routes</h3>
+        <div class="route-list" id="route-list"></div>
+        <div class="action-buttons">
+          <button id="clear-all" class="action-btn btn-danger tooltip">
+            <span>Clear All</span>
+            <span class="tooltiptext">Remove all saved data</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="map-container">
+      <div id="map"></div>
+      
+      <!-- View Toggle (Top Right) -->
+      <div class="view-toggle">
+        <button id="view-routes" class="active">Routes</button>
+        <button id="view-heatmap">Heatmap</button>
+      </div>
+
+      <!-- Fullscreen Button -->
+      <button class="fullscreen-btn tooltip" id="fullscreen-btn">
+        <i class="fas fa-expand"></i>
+        <span class="tooltiptext">Fullscreen</span>
+      </button>
+
+      <!-- Legend -->
+      <div class="legend" id="legend">
+        <div class="legend-item">
+          <div class="legend-color" style="background: #FF0000;"></div>
+          <span>Car</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #00FF00;"></div>
+          <span>Public Transport</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #0000FF;"></div>
+          <span>Train</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #FF00FF;"></div>
+          <span>Airplane</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #FFA500;"></div>
+          <span>Walking</span>
+        </div>
+      </div>
+
+      <!-- Snapping Status -->
+      <div class="snapping-status" id="snapping-status">
+        Snapping route to roads...
+      </div>
+
+      <!-- Loading Spinner -->
+      <div class="loading-spinner" id="loading-spinner"></div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">Confirm Action</div>
+        <div class="modal-body" id="modal-message">Are you sure?</div>
+        <div class="modal-footer">
+          <button class="modal-btn cancel" id="modal-cancel">Cancel</button>
+          <button class="modal-btn confirm" id="modal-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- Leaflet Draw -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+  <!-- OSRM via Leaflet Routing Machine -->
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+  <script>
+    // ============================================
+    // MAIN APPLICATION
+    // ============================================
+
+    class HeatmapApp {
+      constructor() {
+        // Map instance
+        this.map = null;
+        
+        // Drawing state
+        this.currentTool = null;
+        this.drawingLayer = null;
+        this.tempPoints = [];
+        this.tempLine = null;
+        this.tempBrushPoints = [];
+        this.tempBrushLine = null;
+        
+        // Data storage
+        this.routes = [];
+        this.points = [];
+        this.nextId = 1;
+        
+        // Current transport mode
+        this.currentTransportMode = 'car';
+        this.currentCustomName = '';
+        this.currentCustomColor = '#FF0000';
+        
+        // Heatmap
+        this.heatmapLayer = null;
+        this.showHeatmap = false;
+        this.showRoutes = true;
+        
+        // Time filter
+        this.currentTimeFilter = 'all';
+        
+        // Route visibility
+        this.routeVisibility = {};
+        
+        // Initialize
+        this.init();
+      }
+
+      init() {
+        this.loadData();
+        this.initMap();
+        this.initDrawingTools();
+        this.initEventListeners();
+        this.initDatePickers();
+        this.updateRouteList();
+        this.updateHeatmap();
+        
+        // Set default dates
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('start-date').value = today;
+        document.getElementById('end-date').value = today;
+      }
+
+      // ============================================
+      // MAP INITIALIZATION
+      // ============================================
+
+      initMap() {
+        // Create map
+        this.map = L.map('map', {
+          center: [48.1486, 17.1077], // Bratislava, Slovakia
+          zoom: 13,
+          fullscreenControl: true,
+          fullscreenControlOptions: {
+            position: 'topright'
+          }
+        });
+
+        // Add OSM base layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(this.map);
+
+        // Create layer for drawn routes
+        this.drawingLayer = L.layerGroup().addTo(this.map);
+        
+        // Create heatmap layer
+        this.heatmapLayer = L.heatLayer([], {
+          radius: 25,
+          blur: 15,
+          maxZoom: 18,
+          gradient: { 0.4: 'blue', 0.6: 'cyan', 0.7: 'lime', 0.8: 'yellow', 1.0: 'red' }
+        });
+
+        // Add existing routes to map
+        this.renderAllRoutes();
+        
+        // Fullscreen button
+        document.getElementById('fullscreen-btn').addEventListener('click', () => {
+          this.toggleFullscreen();
+        });
+      }
+
+      toggleFullscreen() {
+        const mapContainer = document.getElementById('map-container');
+        if (!document.fullscreenElement) {
+          mapContainer.requestFullscreen().catch(err => {
+            console.error('Fullscreen error:', err);
+          });
+        } else {
+          document.exitFullscreen();
+        }
+      }
+
+      // ============================================
+      // DATA PERSISTENCE
+      // ============================================
+
+      loadData() {
+        try {
+          const savedRoutes = localStorage.getItem('heatmap_routes');
+          const savedPoints = localStorage.getItem('heatmap_points');
+          const savedNextId = localStorage.getItem('heatmap_next_id');
+          
+          if (savedRoutes) {
+            this.routes = JSON.parse(savedRoutes);
+          }
+          if (savedPoints) {
+            this.points = JSON.parse(savedPoints);
+          }
+          if (savedNextId) {
+            this.nextId = parseInt(savedNextId);
+          }
+          
+          // Initialize visibility
+          this.routes.forEach(route => {
+            this.routeVisibility[route.id] = true;
+          });
+          
+        } catch (error) {
+          console.error('Error loading data:', error);
+          this.routes = [];
+          this.points = [];
+          this.nextId = 1;
+        }
+      }
+
+      saveData() {
+        try {
+          localStorage.setItem('heatmap_routes', JSON.stringify(this.routes));
+          localStorage.setItem('heatmap_points', JSON.stringify(this.points));
+          localStorage.setItem('heatmap_next_id', this.nextId.toString());
+        } catch (error) {
+          console.error('Error saving data:', error);
+        }
+      }
+
+      // ============================================
+      // DRAWING TOOLS
+      // ============================================
+
+      initDrawingTools() {
+        // Line drawing
+        this.map.on('click', (e) => {
+          if (this.currentTool === 'line') {
+            this.addPointToLine(e.latlng);
+          } else if (this.currentTool === 'point') {
+            this.addPoint(e.latlng);
+          }
+        });
+
+        // Brush drawing (freehand)
+        this.map.on('mousemove', (e) => {
+          if (this.currentTool === 'brush' && e.originalEvent.buttons === 1) {
+            this.addBrushPoint(e.latlng);
+          }
+        });
+
+        this.map.on('mousedown', (e) => {
+          if (this.currentTool === 'brush') {
+            this.startBrushDrawing(e.latlng);
+          }
+        });
+
+        this.map.on('mouseup', () => {
+          if (this.currentTool === 'brush') {
+            this.endBrushDrawing();
+          }
+        });
+
+        // Touch support for mobile
+        this.map.on('touchstart', (e) => {
+          if (this.currentTool === 'brush') {
+            this.startBrushDrawing(e.latlng);
+          }
+        });
+
+        this.map.on('touchmove', (e) => {
+          if (this.currentTool === 'brush') {
+            this.addBrushPoint(e.latlng);
+          }
+        });
+
+        this.map.on('touchend', () => {
+          if (this.currentTool === 'brush') {
+            this.endBrushDrawing();
+          }
+        });
+      }
+
+      startBrushDrawing(latlng) {
+        this.tempBrushPoints = [latlng];
+        this.tempBrushLine = L.polyline([latlng], {
+          color: this.getCurrentColor(),
+          weight: 4,
+          opacity: 0.8
+        }).addTo(this.drawingLayer);
+      }
+
+      addBrushPoint(latlng) {
+        if (!this.tempBrushLine) {
+          this.startBrushDrawing(latlng);
+          return;
+        }
+        
+        this.tempBrushPoints.push(latlng);
+        this.tempBrushLine.setLatLngs(this.tempBrushPoints);
+      }
+
+      endBrushDrawing() {
+        if (this.tempBrushLine && this.tempBrushPoints.length > 1) {
+          this.saveCurrentLine();
+        }
+      }
+
+      addPointToLine(latlng) {
+        this.tempPoints.push(latlng);
+        
+        if (this.tempLine) {
+          this.drawingLayer.removeLayer(this.tempLine);
+        }
+        
+        if (this.tempPoints.length > 1) {
+          this.tempLine = L.polyline(this.tempPoints, {
+            color: this.getCurrentColor(),
+            weight: 4,
+            opacity: 0.8
+          }).addTo(this.drawingLayer);
+        } else {
+          // Show a marker for the first point
+          L.marker(latlng, {
+            icon: L.divIcon({
+              className: 'temp-marker',
+              html: '<i class="fas fa-map-pin" style="color: ' + this.getCurrentColor() + '; font-size: 20px;"></i>',
+              iconSize: [20, 20]
+            })
+          }).addTo(this.drawingLayer);
+        }
+      }
+
+      addPoint(latlng) {
+        const point = {
+          id: 'p_' + this.nextId++,
+          date: new Date().toISOString().split('T')[0],
+          transportMode: this.currentTransportMode,
+          customName: this.currentTransportMode === 'custom' ? this.currentCustomName : null,
+          color: this.getCurrentColor(),
+          latlng: [latlng.lat, latlng.lng],
+          isSnapped: false,
+          name: null
+        };
+        
+        this.points.push(point);
+        this.saveData();
+        
+        // Add marker to map
+        this.renderPoint(point);
+        
+        // Update heatmap
+        this.updateHeatmap();
+      }
+
+      saveCurrentLine() {
+        if (this.tempPoints.length < 2 && this.tempBrushPoints.length < 2) {
+          return;
+        }
+        
+        const points = this.tempPoints.length > 1 ? this.tempPoints : this.tempBrushPoints;
+        
+        const route = {
+          id: 'r_' + this.nextId++,
+          date: new Date().toISOString().split('T')[0],
+          transportMode: this.currentTransportMode,
+          customName: this.currentTransportMode === 'custom' ? this.currentCustomName : null,
+          color: this.getCurrentColor(),
+          points: points.map(p => [p.lat, p.lng]),
+          isSnapped: false,
+          name: null
+        };
+        
+        this.routes.push(route);
+        this.routeVisibility[route.id] = true;
+        this.saveData();
+        
+        // Clear temp data
+        this.clearTempDrawing();
+        
+        // Render the new route
+        this.renderRoute(route);
+        
+        // Update route list and heatmap
+        this.updateRouteList();
+        this.updateHeatmap();
+        
+        // Show success
+        this.showSnappingStatus('Route saved!', 2000);
+      }
+
+      clearTempDrawing() {
+        if (this.tempLine) {
+          this.drawingLayer.removeLayer(this.tempLine);
+          this.tempLine = null;
+        }
+        if (this.tempBrushLine) {
+          this.drawingLayer.removeLayer(this.tempBrushLine);
+          this.tempBrushLine = null;
+        }
+        this.tempPoints = [];
+        this.tempBrushPoints = [];
+      }
+
+      // ============================================
+      // RENDERING
+      // ============================================
+
+      renderAllRoutes() {
+        // Clear existing route layers
+        this.drawingLayer.clearLayers();
+        
+        // Re-add all routes
+        this.routes.forEach(route => {
+          if (this.routeVisibility[route.id] !== false) {
+            this.renderRoute(route);
+          }
+        });
+        
+        // Re-add all points
+        this.points.forEach(point => {
+          this.renderPoint(point);
+        });
+      }
+
+      renderRoute(route) {
+        if (this.routeVisibility[route.id] === false) return;
+        
+        const color = route.color || this.getColorForMode(route.transportMode);
+        const weight = route.isSnapped ? 6 : 4;
+        const opacity = route.isSnapped ? 1.0 : 0.8;
+        
+        const polyline = L.polyline(route.points, {
+          color: color,
+          weight: weight,
+          opacity: opacity,
+          smoothFactor: route.isSnapped ? 0 : 1.0
+        }).addTo(this.drawingLayer);
+        
+        // Store route reference on the layer for later access
+        polyline.routeId = route.id;
+        
+        // Add click handler for route selection
+        polyline.on('click', (e) => {
+          this.selectRoute(route.id);
+        });
+        
+        // Add tooltip
+        polyline.bindTooltip(
+          `Route ${route.id} - ${route.transportMode} (${route.date})`,
+          { permanent: false, direction: 'top' }
+        );
+        
+        return polyline;
+      }
+
+      renderPoint(point) {
+        const color = point.color || this.getColorForMode(point.transportMode);
+        
+        const marker = L.circleMarker(point.latlng, {
+          radius: 8,
+          fillColor: color,
+          color: '#fff',
+          weight: 2,
+          opacity: 1,
+          fillOpacity: 0.8
+        }).addTo(this.drawingLayer);
+        
+        // Store point reference
+        marker.pointId = point.id;
+        
+        // Add tooltip
+        marker.bindTooltip(
+          `Point ${point.id} - ${point.transportMode} (${point.date})`,
+          { permanent: false, direction: 'top' }
+        );
+        
+        return marker;
+      }
+
+      updateHeatmap() {
+        // Remove existing heatmap
+        if (this.map.hasLayer(this.heatmapLayer)) {
+          this.map.removeLayer(this.heatmapLayer);
+        }
+        
+        if (!this.showHeatmap) return;
+        
+        // Collect all points from visible routes and points
+        const heatPoints = [];
+        
+        // Add points from routes
+        this.routes.forEach(route => {
+          if (this.routeVisibility[route.id] === false) return;
+          if (!this.passTimeFilter(route.date)) return;
+          if (!this.passModeFilter(route.transportMode)) return;
+          
+          route.points.forEach(point => {
+            heatPoints.push([point[0], point[1], 0.5]);
+          });
+        });
+        
+        // Add standalone points
+        this.points.forEach(point => {
+          if (!this.passTimeFilter(point.date)) return;
+          if (!this.passModeFilter(point.transportMode)) return;
+          
+          heatPoints.push([point.latlng[0], point.latlng[1], 1.0]);
+        });
+        
+        // Update heatmap
+        this.heatmapLayer.setLatLngs(heatPoints);
+        
+        if (heatPoints.length > 0) {
+          this.heatmapLayer.addTo(this.map);
+        }
+      }
+
+      // ============================================
+      // EVENT LISTENERS
+      // ============================================
+
+      initEventListeners() {
+        // Tool buttons
+        document.getElementById('draw-line').addEventListener('click', () => {
+          this.setTool('line');
+        });
+        
+        document.getElementById('draw-point').addEventListener('click', () => {
+          this.setTool('point');
+        });
+        
+        document.getElementById('draw-brush').addEventListener('click', () => {
+          this.setTool('brush');
+        });
+        
+        document.getElementById('stop-drawing').addEventListener('click', () => {
+          this.setTool(null);
+        });
+        
+        // Transport mode selector
+        document.getElementById('transport-mode').addEventListener('change', (e) => {
+          this.currentTransportMode = e.target.value;
+          this.toggleCustomModeInput();
+        });
+        
+        // Custom mode inputs
+        document.getElementById('custom-name').addEventListener('input', (e) => {
+          this.currentCustomName = e.target.value;
+        });
+        
+        document.getElementById('custom-color').addEventListener('input', (e) => {
+          this.currentCustomColor = e.target.value;
+          document.getElementById('custom-color-preview').style.background = e.target.value;
+        });
+        
+        // Snap route button
+        document.getElementById('snap-route').addEventListener('click', () => {
+          this.snapCurrentRoute();
+        });
+        
+        // Time filter buttons
+        document.querySelectorAll('.time-filter-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.time-filter-btn').forEach(b => {
+              b.classList.remove('active');
+            });
+            btn.classList.add('active');
+            this.currentTimeFilter = btn.dataset.filter;
+            this.updateHeatmap();
+            this.updateRouteList();
+          });
+        });
+        
+        // View toggle
+        document.getElementById('view-routes').addEventListener('click', () => {
+          document.getElementById('view-routes').classList.add('active');
+          document.getElementById('view-heatmap').classList.remove('active');
+          this.showRoutes = true;
+          this.showHeatmap = false;
+          this.drawingLayer.addTo(this.map);
+          if (this.map.hasLayer(this.heatmapLayer)) {
+            this.map.removeLayer(this.heatmapLayer);
+          }
+        });
+        
+        document.getElementById('view-heatmap').addEventListener('click', () => {
+          document.getElementById('view-heatmap').classList.add('active');
+          document.getElementById('view-routes').classList.remove('active');
+          this.showRoutes = false;
+          this.showHeatmap = true;
+          this.drawingLayer.removeFrom(this.map);
+          this.updateHeatmap();
+        });
+        
+        // Toggle routes/heatmap buttons
+        document.getElementById('toggle-routes').addEventListener('click', () => {
+          this.showRoutes = !this.showRoutes;
+          if (this.showRoutes) {
+            this.drawingLayer.addTo(this.map);
+          } else {
+            this.drawingLayer.removeFrom(this.map);
+          }
+        });
+        
+        document.getElementById('toggle-heatmap').addEventListener('click', () => {
+          this.showHeatmap = !this.showHeatmap;
+          this.updateHeatmap();
+        });
+        
+        // Clear all button
+        document.getElementById('clear-all').addEventListener('click', () => {
+          this.showConfirmationModal(
+            'Clear All Data',
+            'Are you sure you want to remove all saved routes and points? This cannot be undone.',
+            () => {
+              this.clearAllData();
+            }
+          );
+        });
+        
+        // Sidebar toggle
+        document.getElementById('sidebar-toggle').addEventListener('click', () => {
+          document.getElementById('sidebar').classList.toggle('collapsed');
+        });
+        
+        // Transport mode filters
+        document.querySelectorAll('.mode-filter').forEach(checkbox => {
+          checkbox.addEventListener('change', () => {
+            this.updateHeatmap();
+            this.updateRouteList();
+          });
+        });
+        
+        // Date range filters
+        document.getElementById('start-date').addEventListener('change', () => {
+          this.updateHeatmap();
+          this.updateRouteList();
+        });
+        
+        document.getElementById('end-date').addEventListener('change', () => {
+          this.updateHeatmap();
+          this.updateRouteList();
+        });
+        
+        // Modal buttons
+        document.getElementById('modal-cancel').addEventListener('click', () => {
+          this.hideConfirmationModal();
+        });
+        
+        document.getElementById('modal-confirm').addEventListener('click', () => {
+          if (this.modalCallback) {
+            this.modalCallback();
+          }
+          this.hideConfirmationModal();
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+          // Escape to stop drawing
+          if (e.key === 'Escape' && this.currentTool) {
+            this.setTool(null);
+          }
+          
+          // Enter to save current drawing
+          if (e.key === 'Enter' && this.currentTool && this.tempPoints.length > 1) {
+            this.saveCurrentLine();
+          }
+        });
+      }
+
+      initDatePickers() {
+        // Set date pickers to today by default
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('start-date').value = today;
+        document.getElementById('end-date').value = today;
+      }
+
+      // ============================================
+      // TOOL MANAGEMENT
+      // ============================================
+
+      setTool(tool) {
+        // Clear active state from all tool buttons
+        document.querySelectorAll('.tool-button').forEach(btn => {
+          btn.classList.remove('active');
+        });
+        
+        // Set active state for selected tool
+        if (tool) {
+          document.getElementById(`draw-${tool}`).classList.add('active');
+          document.getElementById('stop-drawing').style.display = 'flex';
+        } else {
+          document.getElementById('stop-drawing').style.display = 'none';
+        }
+        
+        this.currentTool = tool;
+        
+        // Clear any temp drawing when switching tools
+        if (tool !== 'line' && tool !== 'brush') {
+          this.clearTempDrawing();
+        }
+        
+        // For point tool, we don't need to show stop button
+        if (tool === 'point') {
+          document.getElementById('stop-drawing').style.display = 'none';
+        }
+      }
+
+      toggleCustomModeInput() {
+        const container = document.getElementById('custom-mode-container');
+        if (this.currentTransportMode === 'custom') {
+          container.classList.add('show');
+        } else {
+          container.classList.remove('show');
+        }
+      }
+
+      // ============================================
+      // COLOR MANAGEMENT
+      // ============================================
+
+      getCurrentColor() {
+        if (this.currentTransportMode === 'custom') {
+          return this.currentCustomColor;
+        }
+        return this.getColorForMode(this.currentTransportMode);
+      }
+
+      getColorForMode(mode) {
+        const colors = {
+          'car': '#FF0000',
+          'public-transport': '#00FF00',
+          'train': '#0000FF',
+          'airplane': '#FF00FF',
+          'walking': '#FFA500'
+        };
+        return colors[mode] || '#FF0000';
+      }
+
+      // ============================================
+      // ROUTE SNAPPING (OSRM)
+      // ============================================
+
+      async snapCurrentRoute() {
+        // Find the most recently added route
+        if (this.routes.length === 0) {
+          this.showSnappingStatus('No routes to snap!', 2000);
+          return;
+        }
+        
+        const route = this.routes[this.routes.length - 1];
+        
+        if (route.isSnapped) {
+          this.showSnappingStatus('Route already snapped!', 2000);
+          return;
+        }
+        
+        if (route.points.length < 2) {
+          this.showSnappingStatus('Route needs at least 2 points!', 2000);
+          return;
+        }
+        
+        this.showSnappingStatus('Snapping route to roads...', 0);
+        document.getElementById('loading-spinner').style.display = 'block';
+        
+        try {
+          const profile = this.getOSRMProfile(route.transportMode);
+          const coordinates = route.points.map(p => `${p[1]},${p[0]}`).join(';');
+          const url = `https://router.project-osrm.org/route/v1/${profile}/${coordinates}?overview=full&geometries=geojson`;
+          
+          const response = await fetch(url);
+          
+          if (!response.ok) {
+            throw new Error('OSRM request failed');
+          }
+          
+          const data = await response.json();
+          
+          if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+            throw new Error('No route found');
+          }
+          
+          // Extract snapped coordinates
+          const snappedPoints = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+          
+          // Update the route
+          route.points = snappedPoints;
+          route.isSnapped = true;
+          
+          this.saveData();
+          this.renderAllRoutes();
+          this.updateHeatmap();
+          
+          this.showSnappingStatus('Route snapped successfully!', 2000);
+          
+        } catch (error) {
+          console.error('Snapping error:', error);
+          this.showSnappingStatus('Snapping failed: ' + error.message, 3000);
+        } finally {
+          document.getElementById('loading-spinner').style.display = 'none';
+        }
+      }
+
+      getOSRMProfile(mode) {
+        const profiles = {
+          'car': 'driving',
+          'public-transport': 'driving', // OSRM doesn't have public transport profile
+          'train': 'driving', // Approximation
+          'airplane': 'driving', // Approximation
+          'walking': 'walking'
+        };
+        return profiles[mode] || 'driving';
+      }
+
+      showSnappingStatus(message, timeout) {
+        const status = document.getElementById('snapping-status');
+        status.textContent = message;
+        status.classList.add('show');
+        
+        if (timeout > 0) {
+          setTimeout(() => {
+            status.classList.remove('show');
+          }, timeout);
+        }
+      }
+
+      // ============================================
+      // ROUTE MANAGEMENT
+      // ============================================
+
+      selectRoute(routeId) {
+        const route = this.routes.find(r => r.id === routeId);
+        if (!route) return;
+        
+        // Highlight the route
+        this.drawingLayer.eachLayer(layer => {
+          if (layer.routeId === routeId) {
+            layer.setStyle({ weight: 8, opacity: 1.0 });
+          } else if (layer.routeId) {
+            layer.setStyle({ weight: 4, opacity: 0.8 });
+          }
+        });
+        
+        // Show route info in sidebar
+        this.showRouteInfo(route);
+      }
+
+      showRouteInfo(route) {
+        // Scroll to route in the list
+        const routeElement = document.querySelector(`.route-item[data-id="${route.id}"]`);
+        if (routeElement) {
+          routeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          routeElement.style.background = '#f1c40f';
+          routeElement.style.color = '#2c3e50';
+          
+          setTimeout(() => {
+            routeElement.style.background = '';
+            routeElement.style.color = '';
+          }, 2000);
+        }
+      }
+
+      deleteRoute(routeId) {
+        const index = this.routes.findIndex(r => r.id === routeId);
+        if (index !== -1) {
+          this.routes.splice(index, 1);
+          delete this.routeVisibility[routeId];
+          this.saveData();
+          this.renderAllRoutes();
+          this.updateRouteList();
+          this.updateHeatmap();
+        }
+      }
+
+      toggleRouteVisibility(routeId) {
+        this.routeVisibility[routeId] = !this.routeVisibility[routeId];
+        this.renderAllRoutes();
+        this.updateHeatmap();
+        this.updateRouteList();
+      }
+
+      updateRouteList() {
+        const routeList = document.getElementById('route-list');
+        routeList.innerHTML = '';
+        
+        // Filter routes based on current filters
+        const filteredRoutes = this.routes.filter(route => {
+          return this.passTimeFilter(route.date) && this.passModeFilter(route.transportMode);
+        });
+        
+        if (filteredRoutes.length === 0) {
+          routeList.innerHTML = '<div style="color: #bdc3c7; font-size: 12px; text-align: center; padding: 10px;">No routes found</div>';
+          return;
+        }
+        
+        filteredRoutes.forEach(route => {
+          const visible = this.routeVisibility[route.id] !== false;
+          const date = new Date(route.date).toLocaleDateString('sk-SK');
+          const modeName = this.getModeName(route.transportMode, route.customName);
+          
+          const routeItem = document.createElement('div');
+          routeItem.className = 'route-item';
+          routeItem.dataset.id = route.id;
+          routeItem.style.borderLeft = `4px solid ${route.color || this.getColorForMode(route.transportMode)}`;
+          
+          routeItem.innerHTML = `
+            <div class="route-item-info">
+              <div style="font-size: 12px; color: #bdc3c7;">${date}</div>
+              <div style="font-size: 14px; font-weight: bold;">${modeName}</div>
+              <div style="font-size: 10px; color: #7f8c8d;">${route.points.length} points${route.isSnapped ? ' (snapped)' : ''}</div>
+            </div>
+            <div class="route-item-actions">
+              <button class="toggle-visibility" data-id="${route.id}">
+                <i class="fas fa-${visible ? 'eye' : 'eye-slash'}"></i>
+              </button>
+              <button class="delete-route" data-id="${route.id}">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          `;
+          
+          // Add click handler for visibility toggle
+          routeItem.querySelector('.toggle-visibility').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleRouteVisibility(route.id);
+          });
+          
+          // Add click handler for delete
+          routeItem.querySelector('.delete-route').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showConfirmationModal(
+              'Delete Route',
+              `Are you sure you want to delete route ${route.id}?`,
+              () => {
+                this.deleteRoute(route.id);
+              }
+            );
+          });
+          
+          // Add click handler for selection
+          routeItem.addEventListener('click', () => {
+            this.selectRoute(route.id);
+          });
+          
+          routeList.appendChild(routeItem);
+        });
+      }
+
+      getModeName(mode, customName) {
+        if (mode === 'custom' && customName) {
+          return customName;
+        }
+        const names = {
+          'car': 'Car',
+          'public-transport': 'Public Transport',
+          'train': 'Train',
+          'airplane': 'Airplane',
+          'walking': 'Walking'
+        };
+        return names[mode] || mode;
+      }
+
+      clearAllData() {
+        this.routes = [];
+        this.points = [];
+        this.nextId = 1;
+        this.routeVisibility = {};
+        
+        this.saveData();
+        this.renderAllRoutes();
+        this.updateRouteList();
+        this.updateHeatmap();
+        
+        this.showSnappingStatus('All data cleared!', 2000);
+      }
+
+      // ============================================
+      // FILTERING
+      // ============================================
+
+      passTimeFilter(date) {
+        if (this.currentTimeFilter === 'all') return true;
+        
+        const routeDate = new Date(date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const startDateInput = document.getElementById('start-date').value;
+        const endDateInput = document.getElementById('end-date').value;
+        
+        // If custom date range is set, use that
+        if (startDateInput && endDateInput) {
+          const startDate = new Date(startDateInput);
+          const endDate = new Date(endDateInput);
+          endDate.setDate(endDate.getDate() + 1); // Include end date
+          
+          return routeDate >= startDate && routeDate < endDate;
+        }
+        
+        // Otherwise use time filter
+        const now = new Date();
+        
+        switch (this.currentTimeFilter) {
+          case 'today':
+            return routeDate.getTime() === today.getTime();
+          case 'week':
+            const weekAgo = new Date(now);
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            return routeDate >= weekAgo;
+          case 'month':
+            const monthAgo = new Date(now);
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+            return routeDate >= monthAgo;
+          case '3months':
+            const threeMonthsAgo = new Date(now);
+            threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+            return routeDate >= threeMonthsAgo;
+          case '6months':
+            const sixMonthsAgo = new Date(now);
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+            return routeDate >= sixMonthsAgo;
+          case 'year':
+            const yearAgo = new Date(now);
+            yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+            return routeDate >= yearAgo;
+          default:
+            return true;
+        }
+      }
+
+      passModeFilter(mode) {
+        const checkboxes = document.querySelectorAll('.mode-filter:checked');
+        const selectedModes = Array.from(checkboxes).map(cb => cb.value);
+        
+        // If no filters selected, show all
+        if (selectedModes.length === 0) return true;
+        
+        return selectedModes.includes(mode);
+      }
+
+      // ============================================
+      // MODAL
+      // ============================================
+
+      showConfirmationModal(title, message, callback) {
+        const modal = document.getElementById('confirmation-modal');
+        const modalMessage = document.getElementById('modal-message');
+        
+        document.querySelector('.modal-header').textContent = title;
+        modalMessage.textContent = message;
+        
+        this.modalCallback = callback;
+        modal.style.display = 'block';
+      }
+
+      hideConfirmationModal() {
+        const modal = document.getElementById('confirmation-modal');
+        modal.style.display = 'none';
+        this.modalCallback = null;
+      }
+    }
+
+    // ============================================
+    // INITIALIZE APPLICATION
+    // ============================================
+
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check for touch support
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      if (isTouchDevice) {
+        document.body.classList.add('touch-device');
+      }
+      
+      // Initialize the app
+      window.heatmapApp = new HeatmapApp();
+    });
+
+    // Handle browser compatibility
+    if (!Promise.prototype.finally) {
+      Promise.prototype.finally = function(callback) {
+        const constructor = this.constructor;
+        return this.then(
+          value => constructor.resolve(callback()).then(() => value),
+          reason => constructor.resolve(callback()).then(() => { throw reason })
+        );
+      };
+    }
+
+    // Polyfill for older browsers
+    if (!String.prototype.startsWith) {
+      String.prototype.startsWith = function(search, pos) {
+        return this.substr(!pos || pos < 0 ? 0 : +pos, search.length) === search;
+      };
+    }
+  </script>
+</body>
+</html>
