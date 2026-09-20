@@ -14,9 +14,10 @@
   <!-- Font Awesome for icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   
-  <!-- Heatmap.js -->
-  <script src="https://cdn.jsdelivr.net/npm/heatmapjs@2.0.5/build/heatmap.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet-heat@0.2.0/leaflet-heat.js"></script>
+  <!-- Heatmap.js from Cloudflare CDN (working MIME type) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/heatmap.js/2.0.5/heatmap.min.js"></script>
+  <!-- SimpleHeat - lightweight alternative -->
+  <script src="https://unpkg.com/simpleheat@0.4.0/simpleheat.min.js"></script>
   
   <style>
     * {
@@ -803,6 +804,9 @@
 
   <!-- OSRM via Leaflet Routing Machine -->
   <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+  
+  <!-- Leaflet.heat - proper heatmap plugin for Leaflet -->
+  <script src="https://unpkg.com/leaflet-heat@0.2.0/dist/leaflet-heat.js"></script>
 
   <script>
     // ============================================
