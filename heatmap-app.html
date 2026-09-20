@@ -963,7 +963,9 @@
           fullscreenControl: true,
           fullscreenControlOptions: {
             position: 'topright'
-          }
+          },
+          // Disable drag when using brush tool
+          dragging: !this.currentTool || this.currentTool !== 'brush'
         });
 
         // Add OSM base layer - using OpenStreetMap France servers (no usage restrictions)
@@ -1098,6 +1100,42 @@
         });
       }
 
+      setTool(tool) {
+        // Clear active state from all tool buttons
+        document.querySelectorAll('.tool-button').forEach(btn => {
+          btn.classList.remove('active');
+        });
+        
+        // Set active state for selected tool
+        if (tool) {
+          document.getElementById(`draw-${tool}`).classList.add('active');
+          document.getElementById('stop-drawing').style.display = 'flex';
+        } else {
+          document.getElementById('stop-drawing').style.display = 'none';
+        }
+        
+        this.currentTool = tool;
+        
+        // Clear any temp drawing when switching tools or stopping
+        if ((tool !== 'line' && tool !== 'brush' && tool !== 'point') || tool === null) {
+          this.clearTempDrawing();
+        }
+        
+        // For point tool, we don't need to show stop button
+        if (tool === 'point') {
+          document.getElementById('stop-drawing').style.display = 'none';
+        }
+
+        // Enable/disable map dragging based on tool
+        if (this.map) {
+          if (tool === 'brush') {
+            this.map.dragging.disable();
+          } else {
+            this.map.dragging.enable();
+          }
+        }
+      }
+
       startBrushDrawing(latlng) {
         this.tempBrushPoints = [latlng];
         this.tempBrushLine = L.polyline([latlng], {
@@ -1126,11 +1164,21 @@
       addPointToLine(latlng) {
         this.tempPoints.push(latlng);
         
+        // Clear previous temp line
         if (this.tempLine) {
           this.drawingLayer.removeLayer(this.tempLine);
+          this.tempLine = null;
         }
         
+        // Clear previous temp markers
+        this.drawingLayer.eachLayer(layer => {
+          if (layer.options && layer.options.className === 'temp-marker') {
+            this.drawingLayer.removeLayer(layer);
+          }
+        });
+        
         if (this.tempPoints.length > 1) {
+          // Draw polyline when we have at least 2 points
           this.tempLine = L.polyline(this.tempPoints, {
             color: this.getCurrentColor(),
             weight: 4,
@@ -1171,11 +1219,22 @@
       }
 
       saveCurrentLine() {
-        if (this.tempPoints.length < 2 && this.tempBrushPoints.length < 2) {
-          return;
+        let points = [];
+        
+        // Collect points from line tool
+        if (this.tempPoints.length >= 2) {
+          points = this.tempPoints;
+        } 
+        // Collect points from brush tool
+        else if (this.tempBrushPoints.length >= 2) {
+          points = this.tempBrushPoints;
         }
         
-        const points = this.tempPoints.length > 1 ? this.tempPoints : this.tempBrushPoints;
+        // Need at least 2 points to create a route
+        if (points.length < 2) {
+          this.showSnappingStatus('Need at least 2 points to create a route!', 2000);
+          return;
+        }
         
         const route = {
           id: 'r_' + this.nextId++,
@@ -1195,8 +1254,8 @@
         // Clear temp data
         this.clearTempDrawing();
         
-        // Render the new route
-        this.renderRoute(route);
+        // Re-render all routes to show the new one
+        this.renderAllRoutes();
         
         // Update route list and heatmap
         this.updateRouteList();
@@ -1313,7 +1372,10 @@
           if (!this.passModeFilter(route.transportMode)) return;
           
           route.points.forEach(point => {
-            heatPoints.push([point[0], point[1], 0.5]);
+            // Ensure point has valid coordinates
+            if (point && point[0] && point[1]) {
+              heatPoints.push([point[0], point[1], 0.5]);
+            }
           });
         });
         
@@ -1321,14 +1383,17 @@
         this.points.forEach(point => {
           if (!this.passTimeFilter(point.date)) return;
           if (!this.passModeFilter(point.transportMode)) return;
-          
-          heatPoints.push([point.latlng[0], point.latlng[1], 1.0]);
+          if (point.latlng && point.latlng[0] && point.latlng[1]) {
+            heatPoints.push([point.latlng[0], point.latlng[1], 1.0]);
+          }
         });
         
-        // Update heatmap
-        this.heatmapLayer.setLatLngs(heatPoints);
+        // Debug: log heatmap points
+        console.log('Heatmap points:', heatPoints.length, heatPoints);
         
+        // Update heatmap
         if (heatPoints.length > 0) {
+          this.heatmapLayer.setLatLngs(heatPoints);
           this.heatmapLayer.addTo(this.map);
         }
       }
