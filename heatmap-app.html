@@ -877,9 +877,9 @@
           }
         });
 
-        // Add OSM base layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        // Add OSM base layer - using OpenStreetMap France servers (no usage restrictions)
+        L.tileLayer('https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles by <a href="https://openstreetmap.fr">OSM France</a>'
         }).addTo(this.map);
 
         // Create layer for drawn routes
