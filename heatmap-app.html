@@ -14,10 +14,8 @@
   <!-- Font Awesome for icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   
-  <!-- Heatmap.js from Cloudflare CDN (working MIME type) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/heatmap.js/2.0.5/heatmap.min.js"></script>
-  <!-- SimpleHeat - lightweight alternative -->
-  <script src="https://unpkg.com/simpleheat@0.4.0/simpleheat.min.js"></script>
+  <!-- SimpleHeat - lightweight heatmap library from reliable CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/simpleheat/0.4.0/simpleheat.min.js"></script>
   
   <style>
     * {
@@ -805,8 +803,95 @@
   <!-- OSRM via Leaflet Routing Machine -->
   <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
   
-  <!-- Leaflet.heat - proper heatmap plugin for Leaflet -->
-  <script src="https://unpkg.com/leaflet-heat@0.2.0/dist/leaflet-heat.js"></script>
+  <!-- Custom Leaflet heatmap layer using SimpleHeat -->
+  <script>
+    L.HeatLayer = L.Layer.extend({
+      initialize: function(points, options) {
+        this._points = points || [];
+        this._options = options || {};
+      },
+      
+      setLatLngs: function(points) {
+        this._points = points;
+        this.redraw();
+      },
+      
+      onAdd: function(map) {
+        this._map = map;
+        this._update();
+        
+        map.on('moveend', this._update, this);
+        map.on('zoomend', this._update, this);
+      },
+      
+      onRemove: function(map) {
+        map.off('moveend', this._update, this);
+        map.off('zoomend', this._update, this);
+      },
+      
+      _update: function() {
+        if (!this._map) return;
+        
+        const size = this._map.getSize();
+        const bounds = this._map.getBounds();
+        const zoom = this._map.getZoom();
+        
+        // Transform points to canvas coordinates
+        const transformed = this._points.map(p => {
+          const point = this._map.latLngToContainerPoint([p[0], p[1]]);
+          return [point.x, point.y, p[2] || 1];
+        });
+        
+        // Create canvas and draw heatmap
+        this._drawHeatmap(transformed, size.x, size.y);
+      },
+      
+      _drawHeatmap: function(points, width, height) {
+        // Remove old canvas if exists
+        if (this._canvas) {
+          this._canvas.remove();
+        }
+        
+        // Create new canvas
+        this._canvas = L.DomUtil.create('canvas', 'leaflet-heat');
+        this._canvas.width = width;
+        this._canvas.height = height;
+        this._canvas.style.position = 'absolute';
+        this._canvas.style.pointerEvents = 'none';
+        
+        // Position canvas
+        const pane = this._map.getPanes().overlayPane;
+        pane.appendChild(this._canvas);
+        
+        // Create heatmap
+        const heat = simpleheat(width, height);
+        
+        // Apply gradient if provided
+        if (this._options.gradient) {
+          const gradient = this._options.gradient;
+          heat.gradient({0.0: 'rgba(0,0,0,0)', ...gradient});
+        } else {
+          heat.gradient({0.0: 'rgba(0,0,0,0)', 0.4: 'blue', 0.6: 'cyan', 0.7: 'lime', 0.8: 'yellow', 1.0: 'red'});
+        }
+        
+        // Apply radius and blur
+        heat.radius(this._options.radius || 25, this._options.blur || 15);
+        
+        // Draw heatmap
+        heat.data(points).draw(this._canvas.getContext('2d'));
+      },
+      
+      redraw: function() {
+        if (this._map) {
+          this._update();
+        }
+      }
+    });
+    
+    L.heatLayer = function(points, options) {
+      return new L.HeatLayer(points, options);
+    };
+  </script>
 
   <script>
     // ============================================
